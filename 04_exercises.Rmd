@@ -178,14 +178,11 @@ TwinCities <- get_stamenmap(
     maptype = "terrain",
     zoom = 10)
 
-# Plot the points on the map
-ggmap(TwinCities) + # creates the map "background"
+ggmap(TwinCities) + 
   geom_point(data = Starbucks, 
              aes(x = Longitude, y = Latitude), 
              alpha = .7, 
              size = .1) +
-  annotate('rect', xmin=-93.17216, ymin=44.93970, xmax=-93.16924, ymax=44.94092, col = "magenta", fill =
-              "magenta") +
   annotate('text', x=-93.17216, y=44.945, label = 'Macalester College', colour = I("red"), size = 2) +
   labs(x="",y="",title="Twin Cities Starbucks Locations with Macalester College Highlighted") +
   theme(plot.title = element_text(hjust = 0.5)) +
@@ -240,6 +237,40 @@ Starbucks are most heavily concentrated on the west coast. However, there are al
   8. In this exercise, you are going to create a single map of some of your favorite places! The end result will be one map that satisfies the criteria below. 
 
   * Create a data set using the `tibble()` function that has 10-15 rows of your favorite places. The columns will be the name of the location, the latitude, the longitude, and a column that indicates if it is in your top 3 favorite locations or not. For an example of how to use `tibble()`, look at the `favorite_stp_by_lisa` I created in the data R code chunk at the beginning.  
+  
+```{r}
+favorite_places <- tibble(
+  place = c("Haute Coffee", "Lexington Green", "Fenway", 
+            "My Dunks", "Museum of Fine Arts", "Crane Beach",
+            "DeCordova", "Walden Pond", "Whipple Hill", "Flatbread Pizza"),
+  long = c(-71.35036672456991, -71.23081563767457, -71.09719634474428, 
+           -71.22176379372972, -71.09402654474461, -70.75615586391044, 
+            -71.31123162401634, -71.3400322993527,-71.18351408956902, -71.23521668453498),
+  lat = c( 42.45966751785935, 42.44982798848844, 42.34681910994715,
+          42.446595964240075,42.339563378486815,42.686784563640984, 42.431087217026814, 42.438976114337386,
+         42.44270050553468, 42.50116924892305),
+  `top` = c(TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE)
+  )
+
+pal <- colorFactor("RdBu", 
+               domain = favorite_places$`top`)
+
+leaflet(data = favorite_places) %>% 
+  addTiles() %>% 
+  addCircles(lng = ~long, 
+             lat = ~lat, 
+             label = ~place,
+             weight = 10, 
+             opacity = 1,
+             color = ~pal(`top`)) %>% 
+  addLegend("bottomright", pal = pal, values = ~`top`, title = "Top 3") %>% 
+   addPolylines(lng = ~long, 
+               lat = ~lat, 
+               color = col2hex("purple"))
+
+
+```
+
 
   * Create a `leaflet` map that uses circles to indicate your favorite places. Label them with the name of the place. Choose the base map you like best. Color your 3 favorite places differently than the ones that are not in your top 3 (HINT: `colorFactor()`). Add a legend that explains what the colors mean.  
   
@@ -308,6 +339,8 @@ ggmap(DCmap)+
   theme(legend.background = element_blank())
 ```
   
+The location closer to the river and most likely closer to the more touristy parts of DC have higher proportion of casual users. The locations on the outskirts of the city have lower proportions of casual users.
+  
 ### COVID-19 data
 
 The following exercises will use the COVID-19 data from the NYT.
@@ -335,6 +368,7 @@ covid19_bystate %>%
 
 ```
 
+The problem with this map is that there is no color distinction between states on the map because all the states have high cumulative numbers.
 
   12. Now add the population of each state to the dataset and color the states by most recent cumulative cases/10,000 people. See the code for doing this with the Starbucks data. You will need to make some modifications. 
 ```{r}
@@ -364,7 +398,25 @@ Covid_per10000 %>%
   13. **CHALLENGE** Choose 4 dates spread over the time period of the data and create the same map as in exercise 12 for each of the dates. Display the four graphs together using faceting. What do you notice?
   
 ```{r}
+covid_all <- 
+  covid19_bystate %>%
+  mutate(state = str_to_lower(state)) %>% 
+  group_by(state) %>% 
+  left_join(Covid_per10000, by = c("state"="state"))
 
+covid_all %>% 
+  filter(date == "2020-03-10")
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state,
+               fill = covid_per_10000)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  theme_map()+
+  theme(legend.position = "right",
+        legend.key.size = unit(1.5, "line")) +
+  labs(title = "Cummulative COVID-19 Cases by State", 
+       caption = "Grace McKenney",
+       fill = "Cases")
 ```
 
   
@@ -407,14 +459,60 @@ leaflet(data = MplsStops) %>%
   
   16. Save the folder from moodle called Minneapolis_Neighborhoods into your project/repository folder for this assignment. Make sure the folder is called Minneapolis_Neighborhoods. Use the code below to read in the data and make sure to **delete the `eval=FALSE`**. Although it looks like it only links to the .sph file, you need the entire folder of files to create the `mpls_nbhd` data set. These data contain information about the geometries of the Minneapolis neighborhoods. Using the `mpls_nbhd` dataset as the base file, join the `mpls_suspicious` and `MplsDemo` datasets to it by neighborhood (careful, they are named different things in the different files). Call this new dataset `mpls_all`.
 
-```{r, eval=FALSE}
+```{r}
 mpls_nbhd <- st_read("Minneapolis_Neighborhoods/Minneapolis_Neighborhoods.shp", quiet = TRUE)
+
+mpls_all <-
+  mpls_nbhd %>%
+  left_join(MplsDemo,
+            by = c("BDNAME"="neighborhood")) %>%
+  left_join(mpls_sus,
+            by =c("BDNAME"="neighborhood")) 
+mpls_all
+
 ```
 
   17. Use `leaflet` to create a map from the `mpls_all` data  that colors the neighborhoods by `prop_suspicious`. Display the neighborhood name as you scroll over it. Describe what you observe in the map.
   
+```{r}
+pal <- colorFactor("Blues", 
+               domain = mpls_all$prop_sus)
+
+leaflet(data = mpls_all) %>% 
+  addTiles() %>% 
+  addPolygons(stroke = FALSE,
+      fillColor = ~pal(prop_sus),
+      fillOpacity = 0.7,
+      smoothFactor = 0.5,
+      label = ~paste(str_to_title(BDNAME)),
+                highlight = highlightOptions(weight = 5, 
+                                 color = "black",
+                                 fillOpacity = 0.9,
+                                 bringToFront = FALSE))
+
+```
+The southeast neighborhoods have the highest proportion of suspicious stops. While the northeast neighborhoods have the fewest. 
+  
   18. Use `leaflet` to create a map of your own choosing. Come up with a question you want to try to answer and use the map to help answer that question. Describe what your map shows. 
   
+```{r}
+pal <- colorFactor("Blues", 
+               domain = mpls_all$collegeGrad)
+
+leaflet(data = mpls_all) %>% 
+  addTiles() %>% 
+  addPolygons(stroke = FALSE,
+      fillColor = ~pal(collegeGrad), #fills according to that variable
+      fillOpacity = 0.7,
+      smoothFactor = 0.5,
+      label = ~paste(str_to_title(BDNAME)),
+                highlight = highlightOptions(weight = 5, 
+                                 color = "black",
+                                 fillOpacity = 0.9,
+                                 bringToFront = FALSE))
+```
+
+My map shows the percent of college graduates per neighborhood.The southwest neighborhoods of Minneapolis have the highest percentage of college graduates.  
   
 ## GitHub link
 
